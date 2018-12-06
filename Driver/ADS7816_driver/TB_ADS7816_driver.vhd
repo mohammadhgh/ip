@@ -19,11 +19,11 @@ ARCHITECTURE behavior OF TB_SPI IS
     PORT(
          clk : IN  std_logic;
          rst : IN  std_logic;
-         start : IN  std_logic;
-         sclk : OUT  std_logic;
-         miso : IN  std_logic;
-         cs : OUT  std_logic;
-         data_out : OUT  std_logic_vector(15 downto 0)
+         i_start : IN  std_logic;
+         o_sclk : OUT  std_logic;
+         i_miso : IN  std_logic;
+         o_cs : OUT  std_logic;
+         o_data_out : OUT  std_logic_vector(15 downto 0)
         );
     END COMPONENT;
     
@@ -51,11 +51,11 @@ BEGIN
    uut: SPI PORT MAP (
           clk => clk,
           rst => rst,
-          start => start,
-          sclk => sclk,
-          miso => miso,
-          cs => cs,
-          data_out => data_out
+          i_start => start,
+          o_sclk => sclk,
+          i_miso => miso,
+          o_cs => cs,
+          o_data_out => data_out
         );
 
    -- Clock process definitions

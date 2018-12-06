@@ -1,10 +1,7 @@
 
---------- SPIokkcsout3
-
---------------------------------------------------------------------------------
-
---   SPI
+-- ADS7816 Driver
    
+-- caution: maximum input clock speed: 50 MHz
 --------------------------------------------------------------------------------
 
 LIBRARY ieee;
@@ -15,17 +12,18 @@ USE ieee.std_logic_unsigned.all;
 entity SPI is
 
 	generic (
-		DATA_WIDTH	: integer := 16
+		DATA_WIDTH	: integer := 16;
+		T_SUCS		: integer := 3
 	);
  
 	port (
 	    clk	   		: in  std_logic;          -- clock
 		rst			: in  std_logic;		-- synch reset
-		start		: in  std_logic;		-- start data transfer
-		sclk		: out std_logic;      		-- DCLOCK
-		miso    	: in  std_logic;        	-- DOUT from ADC    --master in, slave out
-		cs      	: out std_logic; 	-- slave select (Active Low)
-		data_out	: out std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '0')  -- adc parallel data 
+		i_start		: in  std_logic;		-- start data transfer
+		o_sclk		: out std_logic := '0';      		-- DCLOCK
+		i_miso    	: in  std_logic;        	-- DOUT from ADC    --master in, slave out
+		o_cs      	: out std_logic := '0'; 	-- slave select (Active Low)
+		o_data_out	: out std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '0')  -- adc parallel data 
 	);
 		 
 end entity;
@@ -34,22 +32,24 @@ architecture Behavioral of SPI is
 
 --------------------------------------------------------------
 
-	type adc_state_type is (IDLE, DATA_TRANSFER); 
+	type adc_state_type is (IDLE, T_SUCS_WAIT, DATA_TRANSFER); 
    	signal adc_state, adc_next_state : adc_state_type := IDLE;
 
 	signal transfer_end : std_logic := '0';
+	signal t_sucs_done	: std_logic := '0';
+	signal shift_in		: std_logic := '0';
+	
 	signal rx_data   	: std_logic_vector (DATA_WIDTH-1 downto 0):= (others => '0');
-	signal bit_cnt		: integer range 0 to  DATA_WIDTH := 0;
-	signal bit_cnt_en	: std_logic := '0';
-	signal bit_cnt_rst	: std_logic := '0';
+	
+	signal timer		: integer range 0 to (DATA_WIDTH + T_SUCS) := 0;
+	signal timer_en		: std_logic := '0';
+	signal timer_rst	: std_logic := '0';
   
 begin
 
 --------------------------------------------------------------
-
-	sclk <= clk;
 	
-	NEXT_STATE_DECODE: process (adc_state, start, transfer_end)
+	NEXT_STATE_DECODE: process (adc_state, i_start, transfer_end, t_sucs_done)
 		begin
 
 			adc_next_state <= idle;			
@@ -57,9 +57,18 @@ begin
 			case (adc_state) is
 
 		  		when IDLE =>
-					if (start = '1') then
-						adc_next_state <= DATA_TRANSFER;
+					if (i_start = '1') then
+						adc_next_state <= T_SUCS_WAIT;
+					else
+					    adc_next_state <= IDLE;
 					end if;
+					
+				when T_SUCS_WAIT =>
+				    if (t_sucs_done = '1') then
+				        adc_next_state <= DATA_TRANSFER;
+				    else
+				    	adc_next_state <= T_SUCS_WAIT;
+				    end if;
 
 				when DATA_TRANSFER =>
 					if (transfer_end = '1') then
@@ -80,7 +89,7 @@ begin
 	SYNC_PROC: process (clk)
 	   begin
 
-		  if (clk'event and clk = '1') then
+		  if (clk'event and clk = '0') then
 		  	adc_state <= adc_next_state;       
 		  end if;
 
@@ -91,23 +100,29 @@ begin
 	OUTPUT_DECODE: process (adc_state)
 		begin
 
-			cs <= '1';
-			bit_cnt_en <= '0';
-			bit_cnt_rst <= '0';
+			o_cs <= '1';
+			timer_en <= '0';
+			timer_rst <= '0';
+			shift_in <= '0';
  
 			case (adc_state) is
 
 		  		when IDLE =>
-					bit_cnt_rst <= '1';
+					timer_rst <= '1';
+					
+				when T_SUCS_WAIT =>
+					timer_en <= '1';
+					o_cs <= '0';
 
 				when DATA_TRANSFER =>
-					cs <= '0';
-					bit_cnt_en <= '1';
+					o_cs <= '0';
+					shift_in <= '1';
+					timer_en <= '1';
 
 				when others =>
-					cs <= '1';
-					bit_cnt_en <= '0';
-					bit_cnt_rst <= '0';
+					o_cs <= '1';
+					timer_en <= '0';
+					timer_rst <= '0';
 
 			end case;
 		
@@ -118,17 +133,18 @@ begin
 	BIT_COUNTER: process (clk)
 		begin
 		
-			if (clk'event and clk='1') then
-				if (bit_cnt_rst = '1') then
-					bit_cnt <= 0;
-				elsif (bit_cnt_en = '1') then
-					bit_cnt <= bit_cnt + 1;
+			if (clk'event and clk='0') then
+				if (timer_rst = '1') then
+					timer <= 0;
+				elsif (timer_en = '1') then
+					timer <= timer + 1;
 				end if;
 			end if;
 
 		end process;
 
-	transfer_end <= '1' when bit_cnt = DATA_WIDTH else '0'; 
+	t_sucs_done  <= '1' when timer = T_SUCS else '0';
+	transfer_end <= '1' when timer = (DATA_WIDTH + T_SUCS) else '0'; 
 	
 --------------------------------------------------------------
 	
@@ -137,12 +153,15 @@ begin
             if (clk'event and clk='1') then
 				if(rst = '1') then
 					rx_data <= (others => '0');
-                elsif(bit_cnt_en = '1') then
-                    rx_data <= rx_data(DATA_WIDTH-2 downto 0) & miso;
+                elsif(shift_in = '1') then
+                    rx_data <= rx_data(DATA_WIDTH-2 downto 0) & i_miso;
                 end if;
             end if;
         end process;
+
+--------------------------------------------------------------
 		
-		data_out <= rx_data;
+	o_sclk <= clk when (shift_in = '1') else '0';
+	o_data_out <= rx_data;
 	
 end;
