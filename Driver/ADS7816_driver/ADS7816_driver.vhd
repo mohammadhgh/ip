@@ -15,7 +15,7 @@ USE ieee.std_logic_unsigned.all;
 entity SPI is
 
 	generic (
-		DATA_WIDTH	: integer := 12
+		DATA_WIDTH	: integer := 16
 	);
  
 	port (
@@ -64,6 +64,8 @@ begin
 				when DATA_TRANSFER =>
 					if (transfer_end = '1') then
 						adc_next_state <= IDLE;
+					else
+					    adc_next_state <= DATA_TRANSFER;
 					end if;
 
 				when others =>
