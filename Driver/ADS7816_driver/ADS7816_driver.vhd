@@ -2,6 +2,7 @@
 -- ADS7816 Driver
    
 -- caution: maximum input clock speed: 50 MHz
+-- T_SUCS: minimum time from CS negedge to SCLK rising edge
 --------------------------------------------------------------------------------
 
 LIBRARY ieee;
@@ -9,7 +10,7 @@ USE ieee.std_logic_1164.all;
 USE ieee.std_logic_arith.all;
 USE ieee.std_logic_unsigned.all;
 
-entity SPI is
+entity ADS7816_driver is
 
 	generic (
 		DATA_WIDTH	: integer := 16;
@@ -17,10 +18,10 @@ entity SPI is
 	);
  
 	port (
-	    clk	   		: in  std_logic;          -- clock
-		rst			: in  std_logic;		-- synch reset
-		i_start		: in  std_logic;		-- start data transfer
-		o_sclk		: out std_logic := '0';      		-- DCLOCK
+	    clk	   		: in  std_logic;          	-- clock
+		rst			: in  std_logic;			-- synch reset
+		i_start		: in  std_logic;			-- start data transfer
+		o_sclk		: out std_logic := '0';		-- DCLOCK
 		i_miso    	: in  std_logic;        	-- DOUT from ADC    --master in, slave out
 		o_cs      	: out std_logic := '0'; 	-- slave select (Active Low)
 		o_data_out	: out std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '0')  -- adc parallel data 
@@ -28,7 +29,7 @@ entity SPI is
 		 
 end entity;
 
-architecture Behavioral of SPI is
+architecture Behavioral of ADS7816_driver is
 
 --------------------------------------------------------------
 
@@ -143,7 +144,7 @@ begin
 
 		end process;
 
-	t_sucs_done  <= '1' when timer = T_SUCS else '0';
+	t_sucs_done  <= '1' when timer = T_SUCS else '0';	--whaiting atleast 50 ns
 	transfer_end <= '1' when timer = (DATA_WIDTH + T_SUCS) else '0'; 
 	
 --------------------------------------------------------------
@@ -154,14 +155,15 @@ begin
 				if(rst = '1') then
 					rx_data <= (others => '0');
                 elsif(shift_in = '1') then
-                    rx_data <= rx_data(DATA_WIDTH-2 downto 0) & i_miso;
+                    rx_data <= rx_data(DATA_WIDTH-2 downto 0) & i_miso;	--MSB first order
                 end if;
             end if;
         end process;
 
 --------------------------------------------------------------
 		
-	o_sclk <= clk when (shift_in = '1') else '0';
+	o_sclk <= clk when (shift_in = '1') else '0'; --disabling clock until t_SUCS is passed
 	o_data_out <= rx_data;
 	
 end;
+

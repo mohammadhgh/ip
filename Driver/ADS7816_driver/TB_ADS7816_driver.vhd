@@ -8,14 +8,14 @@ USE ieee.std_logic_unsigned.all;
 -- arithmetic functions with Signed or Unsigned values
 USE ieee.numeric_std.ALL;
  
-ENTITY TB_SPI IS
-END TB_SPI;
+ENTITY TB_ADS7816_driver IS
+END TB_ADS7816_driver;
  
-ARCHITECTURE behavior OF TB_SPI IS 
+ARCHITECTURE behavior OF TB_ADS7816_driver IS 
  
     -- Component Declaration for the Unit Under Test (UUT)
  
-    COMPONENT SPI
+    COMPONENT ADS7816_driver
     PORT(
          clk : IN  std_logic;
          rst : IN  std_logic;
@@ -48,7 +48,7 @@ ARCHITECTURE behavior OF TB_SPI IS
 BEGIN
  
 	-- Instantiate the Unit Under Test (UUT)
-   uut: SPI PORT MAP (
+   uut: ADS7816_driver PORT MAP (
           clk => clk,
           rst => rst,
           i_start => start,
@@ -86,3 +86,4 @@ BEGIN
    end process;
 
 END;
+
